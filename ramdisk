@@ -11,7 +11,7 @@ readonly SIZE="${2:-1}"
 
 # Settings
 readonly DISK_PATH="/media/ramdisk"
-readonly DISK_USER="rpedrielli"
+readonly DISK_USER="invex"
 
 print_usage()
 {
