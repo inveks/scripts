@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+set -Eeu
+trap 'echo "Error: ${SCRIPT} - Function: ${FUNCNAME:-global context} - Line: ${LINENO} - Status: ${?}"' ERR
+
+# Arguments
+# shellcheck disable=SC2155
+readonly SCRIPT=$(basename "${0}")
+readonly URL="${1}"
+readonly DIST="${2}"
+readonly REPO="${3}"
+readonly ARCH="${4:-$(dpkg --print-architecture)}"
+
+main()
+{
+    curl -fsSL "${URL}/dists/${DIST}/${REPO}/binary-${ARCH}/Packages.gz" \
+    | gunzip \
+    | grep '^Package' \
+    | awk '{print $2}' \
+    | sort -u
+}
+
+main

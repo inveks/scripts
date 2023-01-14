@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+
+set -Eeu
+trap 'echo "Error: ${SCRIPT} - Function: ${FUNCNAME:-global context} - Line: ${LINENO} - Status: ${?}"' ERR
+trap 'rm -rf ${TEMP_DIR}' EXIT
+
+# Arguments
+# shellcheck disable=SC2155
+readonly SCRIPT=$(basename "${0}")
+
+# Settings
+readonly TEMP_DIR="/tmp/${SCRIPT}"
+readonly ARCH="amd64"
+readonly DEB_EXCLUDE_LIST="lts"
+readonly DEBIAN_FRONTEND="noninteractive"
+
+export DEBIAN_FRONTEND
+
+echo_error()
+{
+    echo -e "\e[0;31m${*}\e[0m"
+}
+
+check_bin()
+{
+    if ! command -v "${1}" &> /dev/null; then
+        echo_error "Error: \"${1}\" is required but not installed."
+        exit 1
+    fi
+}
+
+get_version()
+{
+    local -r PACKAGE_NAME="${1}"
+    local -r RAW_VERSION=$(dpkg -s "${PACKAGE_NAME}" 2> /dev/null || true)
+
+    echo "${RAW_VERSION}" | grep "Version" | cut -d ' ' -f 2 || true
+}
+
+print_version()
+{
+    local OLD_VERSION=${1:-}
+    local NEW_VERSION=${2:-}
+
+    if [ -z "${OLD_VERSION}" ]; then
+        OLD_VERSION="none"
+    fi
+
+    if [ -z "${NEW_VERSION}" ]; then
+        NEW_VERSION="error getting the new version"
+    fi
+
+    if [ "${OLD_VERSION}" = "${NEW_VERSION}" ]; then
+        echo -e "Already at newest version: \e[0;32m${NEW_VERSION}\e[0m"
+    else
+        echo -e "Version updated: \e[0;33m${OLD_VERSION} -> ${NEW_VERSION}\e[0m"
+    fi
+}
+
+install_deb()
+{
+    local -r URL="${1}"
+    local -r DEB_PATH="${TEMP_DIR}/package.deb"
+
+    curl -fsSL "${URL}" -o "${DEB_PATH}"
+    sudo dpkg -i "${DEB_PATH}" > /dev/null
+    rm -f "${DEB_PATH}"
+}
+
+install_github_deb()
+{
+    local -r PACKAGE_NAME="${1}"
+    local -r GITHUB_PATH="${2}"
+
+    local -r URL="$(curl -fsSL "https://api.github.com/repos/${GITHUB_PATH}/releases/latest" | \
+                        jq -r .assets[].browser_download_url | \
+                        grep -iE "${ARCH}.*\.deb" | \
+                        grep -vE "(${DEB_EXCLUDE_LIST})")"
+
+    install_deb "${URL}"
+}
+
+install_discord-ptb()
+{
+    local -r URL="https://discord.com/api/download/ptb?platform=linux&format=deb"
+
+    install_deb "${URL}"
+}
+
+install_gitkraken()
+{
+    local -r URL="https://release.axocdn.com/linux/gitkraken-amd64.deb"
+
+    install_deb "${URL}"
+}
+
+install_notable()
+{
+    local -r URL="https://download.notable.app/?target=deb"
+
+    install_deb "${URL}"
+}
+
+install_smartgit()
+{
+    local -r URL_PATH="$(curl -fsSL https://www.syntevo.com/smartgit/download/ | \
+                            grep -oE '/downloads/smartgit/smartgit-[0-9]{2}_[0-9]{1,2}_[0-9]{1,2}\.deb')"
+
+    local -r URL="https://www.syntevo.com/${URL_PATH}"
+
+    install_deb "${URL}"
+}
+
+install_app()
+{
+    local -r PACKAGE_NAME="${1}"
+    local -r INSTALL_FROM="${2}"
+    local -r GITHUB_PATH="${3}"
+
+    echo "Install ${PACKAGE_NAME}"
+
+    local -r OLD_VERSION="$(get_version "${PACKAGE_NAME}")"
+
+    if [ "${INSTALL_FROM}" = "github" ]; then
+        install_github_deb "${PACKAGE_NAME}" "${GITHUB_PATH}"
+    elif [ "${INSTALL_FROM}" = "url" ]; then
+        # shellcheck disable=SC2086
+        install_${PACKAGE_NAME}
+    else
+        echo_error "Error: install source not supported: ${INSTALL_FROM}"
+        exit 1
+    fi
+
+    local -r NEW_VERSION="$(get_version "${PACKAGE_NAME}")"
+
+    print_version "${OLD_VERSION}" "${NEW_VERSION}"
+    echo
+}
+
+main()
+{
+    check_bin curl
+    check_bin grep
+    check_bin jq
+
+    if [ -d "${TEMP_DIR}" ]; then
+        rm -rf "${TEMP_DIR}"
+    fi
+
+    mkdir -p "${TEMP_DIR}"
+
+    sudo -v
+
+    # Arguments  "package"          "from"    "github path"
+    install_app  "discord-ptb"      "url"     ""
+    install_app  "gitkraken"        "url"     ""
+    install_app  "notable"          "url"     ""
+    install_app  "smartgit"         "url"     ""
+    install_app  "syft"             "github"  "anchore/syft"
+}
+
+main

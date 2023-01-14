@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+set -Eeu
+trap 'echo "Error: ${SCRIPT} - Function: ${FUNCNAME:-global context} - Line: ${LINENO} - Status: ${?}"' ERR
+
+# Arguments
+# shellcheck disable=SC2155
+readonly SCRIPT=$(basename "${0}")
+
+echo_info()
+{
+    echo -e "\e[0;36m${*}\e[0m"
+}
+
+echo_error()
+{
+    echo -e "\e[0;31m${*}\e[0m"
+}
+
+check_bin()
+{
+    if ! command -v "${1}" &> /dev/null; then
+        echo_error "Error: \"${1}\" is required but not installed."
+        exit 1
+    fi
+}
+
+main()
+{
+    check_bin npm
+
+    local PACKAGES
+    PACKAGES="$(npm outdated --global --parseable --depth 0 || true)"
+
+    if [ -n "${PACKAGES}" ]; then
+
+        PACKAGES="$(echo "${PACKAGES}" | cut -d ":" -f 1)"
+
+        for PACKAGE in ${PACKAGES}; do
+            PACKAGE=${PACKAGE#*node_modules/}
+            echo_info "Updating ${PACKAGE}"
+            npm install --global "${PACKAGE}"
+        done
+
+        echo_info "Done"
+    else
+        echo_info "All packages are already at the latest version"
+    fi
+}
+
+main

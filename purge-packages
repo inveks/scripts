@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -Eeu
+trap 'echo "Error: ${SCRIPT} - Function: ${FUNCNAME:-global context} - Line: ${LINENO} - Status: ${?}"' ERR
+
+# Arguments
+# shellcheck disable=SC2155
+readonly SCRIPT=$(basename "${0}")
+
+main()
+{
+    # shellcheck disable=SC2046
+    sudo apt autoremove --purge $(dpkg -l | grep '^rc' | awk '{print $2}')
+    flatpak uninstall --unused --delete-data --assumeyes
+}
+
+main

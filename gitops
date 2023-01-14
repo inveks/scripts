@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+
+set -Eeu
+trap 'echo "Error: ${SCRIPT} - Function: ${FUNCNAME:-global context} - Line: ${LINENO} - Status: ${?}"' ERR
+
+# Arguments
+# shellcheck disable=SC2155
+readonly SCRIPT=$(basename "${0}")
+readonly COMMAND="${1:-}"
+
+# Settings
+readonly COLOR_REPO="\e[0;32m"
+readonly COLOR_BRANCH="\e[0;31m"
+readonly COLOR_INDENT="\e[0;34m"
+readonly COLOR_OK="\e[0;33m"
+readonly COLOR_ERROR="\e[0;35m"
+readonly COLOR_RESET="\e[0m"
+
+print_usage()
+{
+    echo
+    echo "Usage: ${SCRIPT} <command> [options]"
+    echo
+    echo "Commands:"
+    echo "    status    Show the repository status"
+    echo "    fetch     Fetch from remote and then show the repository status"
+    echo "    pull      If the repository is clean, pull from remote, otherwise do a fetch and then show the status"
+    echo "    develop   Checks out the \"develop\" branch if it exists"
+    echo
+    echo "Options:"
+    echo "    -n        Show only the repositories that are not in a clean status"
+    echo "    -d dir    Recursively search into the specificed directory (default: current directory)"
+    echo
+
+    exit 1
+}
+
+check_clean()
+{
+    CLEAN=$(git status | grep 'working tree clean' -c || true)
+    FIXUP=$(git status | grep 'fixup' -c || true)
+
+    if [ "${FIXUP}" != "0" ]; then
+        CLEAN=0;
+    fi
+}
+
+repo_status()
+{
+    local -r CHECK="${1:-}"
+
+    REMOTE=${REMOTE:-1}
+
+    if [ "${CHECK}" != "nockeck" ]; then
+        check_clean
+    fi
+
+    if [[ "${CLEAN}" = "0" || "${NOT_CLEAN_ONLY}" = "0" ]]; then
+        echo
+        echo -en "${COLOR_INDENT}>>>${COLOR_RESET} "
+        echo -en "${COLOR_REPO}${DIRECTORY:$((${#BASE_DIR} + 1))}${COLOR_RESET} "
+        echo -e  "${COLOR_BRANCH}($(git status | head -n1 | awk '{print $3}'))${COLOR_RESET}"
+        echo
+    fi
+
+    if [ "${CLEAN}" = "0" ]; then
+        if [ "${REMOTE}" = "0" ]; then
+            echo -e "\t${COLOR_ERROR}Remote 'origin' is not set${COLOR_RESET}"
+        else
+            git status
+        fi
+        echo
+    elif [ "${NOT_CLEAN_ONLY}" = "0" ]; then
+        echo -e "\t${COLOR_OK}clean${COLOR_RESET}"
+        echo
+    fi
+}
+
+repo_fetch()
+{
+    git fetch --all -tpq
+    repo_status
+}
+
+repo_pull()
+{
+    check_clean
+
+    git fetch --all -tpq
+
+    if [ "${CLEAN}" = "1" ]; then
+	    if git remote get-url origin > /dev/null 2>&1; then
+            REMOTE=1
+            git pull --all --ff -q
+        else
+            CLEAN=0
+            REMOTE=0
+        fi
+    fi
+
+    repo_status nocheck
+}
+
+repo_develop()
+{
+    git switch develop
+    repo_status nocheck
+}
+
+do_repo_action()
+{
+    local -r DIRECTORIES=$(find "${BASE_DIR}" -type d -name '.git' | sed 's|/.git||' | sort -f)
+
+    for DIRECTORY in ${DIRECTORIES}; do
+        cd "${DIRECTORY}" || exit 1
+        ${CALL}
+    done
+}
+
+main()
+{
+    case ${COMMAND} in
+        status)
+            CALL='repo_status'
+            ;;
+        fetch)
+            CALL='repo_fetch'
+            ;;
+        pull)
+            CALL='repo_pull'
+            ;;
+        develop)
+            CALL='repo_develop'
+            ;;
+        *)
+            print_usage
+            ;;
+    esac
+
+    readonly CALL
+
+    shift
+
+    NOT_CLEAN_ONLY=0
+    BASE_DIR="$(pwd)"
+
+    while getopts "nd:" OPTION; do
+        case ${OPTION} in
+            n)
+                NOT_CLEAN_ONLY=1
+                ;;
+            d)
+                BASE_DIR=$(realpath "${OPTARG}")
+                ;;
+            *)
+                print_usage
+                ;;
+        esac
+    done
+
+    readonly NOT_CLEAN_ONLY
+    readonly BASE_DIR
+
+    do_repo_action
+}
+
+main "${@}"

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+echo -e "\e[0m      TEXT       \e[1m LIGHT_TEXT"
+echo -e "\e[0;30m 0    BLACK      \e[1m LIGHT_BLACK"
+echo -e "\e[0;31m 1    RED        \e[1m LIGHT_RED"
+echo -e "\e[0;32m 2    GREEN      \e[1m LIGHT_GREEN"
+echo -e "\e[0;33m 3    YELLOW     \e[1m LIGHT_YELLOW"
+echo -e "\e[0;34m 4    BLUE       \e[1m LIGHT_BLUE"
+echo -e "\e[0;35m 5    MAGENTA    \e[1m LIGHT_MAGENTA"
+echo -e "\e[0;36m 6    CYAN       \e[1m LIGHT_CYAN"
+echo -e "\e[0;37m 7    WHITE      \e[1m LIGHT_WHITE"
+echo -en "\e[0m"
